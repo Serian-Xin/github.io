@@ -1,50 +1,48 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Szx的圣诞树</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>圣诞树 · 底部四分之一对齐</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            background: linear-gradient(to bottom, #0a0a2a, #1a1a40);
+            background: linear-gradient(to bottom, #000420, #0a0a30);
             font-family: 'Arial', sans-serif;
-        }
-        .info {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            color: #fff;
-            font-size: 24px;
-            text-shadow: 0 0 10px rgba(255,255,255,0.7);
-            z-index: 100;
-            font-style: italic;
-        }
-        .controls {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            color: white;
-            background: rgba(0,0,0,0.5);
-            padding: 10px;
-            border-radius: 5px;
-            font-size: 14px;
-            z-index: 100;
+            touch-action: none;
         }
         canvas {
             display: block;
         }
+        .text {
+            position: absolute;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ffccdd;
+            font-size: 20px;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(255, 200, 220, 0.8);
+            z-index: 100;
+            pointer-events: none;
+        }
+        .hint {
+            position: absolute;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 12px;
+            text-align: center;
+            z-index: 100;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
-    <div class="info">🎄 Merry Christmas! 🎄</div>
-    <div class="controls">
-        <div>左键拖拽：旋转视角</div>
-        <div>滚轮：缩放</div>
-        <div>右键拖拽：平移</div>
-    </div>
-
+    <div class="text">🎄SZX‘s Merry Christmas! 🎄</div>
+    <div class="hint">滑动旋转 · 双指缩放</div>
     <canvas id="treeCanvas"></canvas>
 
     <script>
@@ -58,91 +56,101 @@
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
 
-        // 相机控制
+        // 相机参数（适中距离）
         let camera = {
             angleX: 0,
             angleY: 0,
-            distance: 3,
+            distance: 3.8,
             offsetX: 0,
             offsetY: 0
         };
 
         let isDragging = false;
-        let isRightDragging = false;
         let lastX = 0, lastY = 0;
 
-        // 粒子数据
         let particles = [];
         let snowflakes = [];
         let star = null;
         let groundGlow = [];
 
-        // 初始化高密度圣诞树（粉+蓝+白）
-        function initTree() {
-            particles = [];
-            const layers = 7; // 增加层数让形状更明显
+        // 👇 树整体在 3D 空间中的垂直偏移（负值表示下移）
+        // 原始树高约 2.4（6层 * 0.4），星星在 2.7
+        // 我们希望树底（y=0）出现在屏幕下方 1/4 处 → 在 3D 中下移约 -1.0
+        const treeYOffset = -1.0;
 
-            for (let layer = 0; layer < layers; layer++) {
-                const radius = 1.3 - layer * 0.16;
-                const height = layer * 0.35;
-                const count = 200 + layer * 80; // 更密集！
+        // 初始化更自然的锥形圣诞树
+function initTree() {
+    particles = [];
+    const layers = 8;                // 增加层数，更细腻
+    const treeHeight = 2.4;          // 树总高（从底 y=0 到顶 y=2.4）
+    const baseRadius = 1.6;          // 底部最大半径
 
-                for (let i = 0; i < count; i++) {
-                    const angle = Math.random() * Math.PI * 2;
-                    const r = Math.sqrt(Math.random()) * radius;
-                    const x = Math.cos(angle) * r;
-                    const z = Math.sin(angle) * r;
-                    const y = height;
+    for (let layer = 0; layer < layers; layer++) {
+        // 从树顶到底部：layer=0 是顶部，layer=layers-1 是底部
+        const t = layer / (layers - 1); // 0 ~ 1
+        const y = treeHeight * (1 - t); // 顶部 y=2.4，底部 y=0
+        const radius = baseRadius * t;  // 顶部半径≈0，底部=baseRadius
 
-                    // 主要颜色：粉、蓝、白
-                    const rand = Math.random();
-                    let color;
-                    if (rand < 0.4) {
-                        // 粉色
-                        color = [1, 0.6, 0.8];
-                    } else if (rand < 0.8) {
-                        // 蓝色
-                        color = [0.6, 0.8, 1];
-                    } else {
-                        // 白色（点缀）
-                        color = [1, 1, 1];
-                    }
+        // 每层粒子数（顶部少，底部多）
+        const count = Math.floor(60 + t * 180);
 
-                    particles.push({ x, y, z, color });
-                }
+        for (let i = 0; i < count; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const r = Math.sqrt(Math.random()) * radius; // 均匀分布
+            const x = Math.cos(angle) * r;
+            const z = Math.sin(angle) * r;
+
+            // 颜色：粉紫白交替
+            let color;
+            if (Math.random() < 0.4) {
+                color = [1, 0.7, 0.9]; // 粉
+            } else if (Math.random() < 0.7) {
+                color = [0.8, 0.7, 1]; // 紫
+            } else {
+                color = [1, 1, 1];     // 白
             }
 
-            // 更大的星星
-            star = { x: 0, y: 2.6, z: 0, color: [1, 1, 0.9] };
-
-            // 地面光晕（淡粉蓝）
-            groundGlow = [];
-            for (let i = 0; i < 200; i++) {
-                const angle = Math.random() * Math.PI * 2;
-                const r = Math.random() * 2.2;
-                const x = Math.cos(angle) * r;
-                const z = Math.sin(angle) * r;
-                groundGlow.push({
-                    x, y: -0.1, z,
-                    color: [0.9, 0.8, 1],
-                    size: Math.random() * 1 + 0.3
-                });
-            }
-
-            // 雪花
-            snowflakes = [];
-            for (let i = 0; i < 70; i++) {
-                snowflakes.push({
-                    x: (Math.random() - 0.5) * 7,
-                    y: Math.random() * 5 + 2,
-                    z: (Math.random() - 0.5) * 7,
-                    speed: Math.random() * 0.02 + 0.01,
-                    size: Math.random() * 2.5 + 1
-                });
-            }
+            particles.push({ x, y, z, color });
         }
+    }
 
-        // 3D 投影函数
+    // 星星紧贴树顶（只高出一点点）
+    star = { x: 0, y: treeHeight + 0.15, z: 0, color: [1, 1, 0] };
+
+    // 地面反光（在树底 y=0 处）
+    groundGlow = [];
+    for (let i = 0; i < 150; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const r = Math.random() * (baseRadius + 0.4);
+        groundGlow.push({
+            x: Math.cos(angle) * r,
+            y: -0.1, // 略低于树底
+            z: Math.sin(angle) * r,
+            color: [0.9, 0.85, 1],
+            size: Math.random() * 0.7 + 0.2
+        });
+    }
+
+    // 雪花（不变）
+    snowflakes = [];
+    for (let i = 0; i < 60; i++) {
+        snowflakes.push({
+            x: (Math.random() - 0.5) * 6,
+            y: Math.random() * 5 + 2,
+            z: (Math.random() - 0.5) * 6,
+            speed: Math.random() * 0.015 + 0.008,
+            size: Math.random() * 1.8 + 0.8
+        });
+    }
+
+    // 👇 关键：整体下移，使树底（y=0）位于屏幕底部 1/4 处
+    const treeYOffset = -1.0;
+    particles.forEach(p => p.y += treeYOffset);
+    star.y += treeYOffset;
+    groundGlow.forEach(g => g.y += treeYOffset);
+}
+
+        // 3D 投影函数（无需修改）
         function project(x, y, z) {
             const cosY = Math.cos(camera.angleY);
             const sinY = Math.sin(camera.angleY);
@@ -161,20 +169,16 @@
             const scale = camera.distance / (camera.distance + z2);
             if (scale <= 0) return null;
 
-            const screenX = x1 * scale * 220 + canvas.width / 2;
-            const screenY = -y1 * scale * 220 + canvas.height / 2;
+            const screenX = x1 * scale * 180 + canvas.width / 2;
+            const screenY = -y1 * scale * 180 + canvas.height / 2;
 
             return { x: screenX, y: screenY, scale };
         }
 
-        // 渲染
-        function render() {
-            ctx.fillStyle = 'rgba(10, 10, 42, 0.1)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // 背景星星
+        // 渲染背景星点
+        function drawStars() {
             ctx.fillStyle = '#ffffff';
-            for (let i = 0; i < 100; i++) {
+            for (let i = 0; i < 80; i++) {
                 const x = Math.random() * canvas.width;
                 const y = Math.random() * canvas.height;
                 const size = Math.random() * 1.2;
@@ -182,76 +186,97 @@
                 ctx.arc(x, y, size, 0, Math.PI * 2);
                 ctx.fill();
             }
+        }
 
-            // 雪花
+        // 渲染雪花
+        function drawSnow() {
             snowflakes.forEach(sf => {
                 sf.y -= sf.speed;
                 if (sf.y < -1) {
-                    sf.y = 4;
-                    sf.x = (Math.random() - 0.5) * 7;
-                    sf.z = (Math.random() - 0.5) * 7;
+                    sf.y = 5;
+                    sf.x = (Math.random() - 0.5) * 6;
+                    sf.z = (Math.random() - 0.5) * 6;
                 }
                 const pos = project(sf.x, sf.y, sf.z);
                 if (pos && pos.scale > 0) {
                     ctx.beginPath();
                     ctx.arc(pos.x, pos.y, sf.size * pos.scale, 0, Math.PI * 2);
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
                     ctx.fill();
                 }
             });
+        }
 
-            // 地面光晕
+        // 渲染地面反光
+        function drawGroundGlow() {
             groundGlow.forEach(g => {
                 const pos = project(g.x, g.y, g.z);
                 if (pos && pos.scale > 0) {
                     ctx.beginPath();
-                    ctx.arc(pos.x, pos.y, g.size * 10 * pos.scale, 0, Math.PI * 2);
-                    ctx.fillStyle = `rgba(${g.color[0]*255}, ${g.color[1]*255}, ${g.color[2]*255}, ${0.25 * pos.scale})`;
+                    ctx.arc(pos.x, pos.y, g.size * 12 * pos.scale, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(${g.color[0]*255}, ${g.color[1]*255}, ${g.color[2]*255}, ${0.18 * pos.scale})`;
                     ctx.fill();
                 }
             });
+        }
 
-            // 圣诞树（从后往前渲染）
-            const sorted = [...particles].sort((a, b) => b.z - a.z);
-            sorted.forEach(p => {
+        // 渲染粒子
+        function drawParticles() {
+            const time = Date.now() * 0.001;
+            particles.forEach(p => {
+                const pulse = Math.sin(time * 2 + p.x * 10) * 0.5 + 0.5;
+                const alpha = 0.6 + pulse * 0.4;
+
                 const pos = project(p.x, p.y, p.z);
                 if (pos && pos.scale > 0) {
-                    const size = 2.8 * pos.scale;
+                    const size = 1.8 * pos.scale;
                     ctx.beginPath();
                     ctx.arc(pos.x, pos.y, size, 0, Math.PI * 2);
                     ctx.fillStyle = `rgb(${p.color[0]*255}, ${p.color[1]*255}, ${p.color[2]*255})`;
+                    ctx.globalAlpha = alpha;
                     ctx.fill();
                 }
             });
+        }
 
-            // 大星星（五角星）
-            if (star) {
-                const pos = project(star.x, star.y, star.z);
-                if (pos && pos.scale > 0) {
-                    const size = 22 * pos.scale; // 更大！
-                    ctx.beginPath();
-                    for (let i = 0; i < 5; i++) {
-                        const a1 = (i * 4) * Math.PI / 5;
-                        const a2 = (i * 4 + 2) * Math.PI / 5;
-                        const x1 = pos.x + Math.cos(a1) * size;
-                        const y1 = pos.y + Math.sin(a1) * size;
-                        const x2 = pos.x + Math.cos(a2) * size;
-                        const y2 = pos.y + Math.sin(a2) * size;
-                        if (i === 0) ctx.moveTo(x1, y1);
-                        ctx.lineTo(x2, y2);
-                    }
-                    ctx.closePath();
-                    // 星星发光效果
-                    ctx.fillStyle = `rgb(${star.color[0]*255}, ${star.color[1]*255}, ${star.color[2]*255})`;
-                    ctx.fill();
-
-                    // 添加外发光
-                    ctx.shadowColor = 'rgba(255, 255, 200, 0.8)';
-                    ctx.shadowBlur = 15 * pos.scale;
-                    ctx.fill();
-                    ctx.shadowBlur = 0;
+        // 渲染星星
+        function drawStar() {
+            if (!star) return;
+            const pos = project(star.x, star.y, star.z);
+            if (pos && pos.scale > 0) {
+                const size = 18 * pos.scale;
+                ctx.beginPath();
+                for (let i = 0; i < 5; i++) {
+                    const a1 = (i * 4) * Math.PI / 5;
+                    const a2 = (i * 4 + 2) * Math.PI / 5;
+                    const x1 = pos.x + Math.cos(a1) * size;
+                    const y1 = pos.y + Math.sin(a1) * size;
+                    const x2 = pos.x + Math.cos(a2) * size;
+                    const y2 = pos.y + Math.sin(a2) * size;
+                    if (i === 0) ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
                 }
+                ctx.closePath();
+                ctx.fillStyle = `rgb(${star.color[0]*255}, ${star.color[1]*255}, ${star.color[2]*255})`;
+                ctx.fill();
+
+                ctx.shadowColor = 'rgba(255, 255, 0, 0.9)';
+                ctx.shadowBlur = 20 * pos.scale;
+                ctx.fill();
+                ctx.shadowBlur = 0;
             }
+        }
+
+        // 主渲染循环
+        function render() {
+            ctx.fillStyle = 'rgba(0, 0, 10, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawStars();
+            drawSnow();
+            drawGroundGlow();
+            drawParticles();
+            drawStar();
         }
 
         function animate() {
@@ -263,40 +288,59 @@
         canvas.addEventListener('mousedown', (e) => {
             lastX = e.clientX;
             lastY = e.clientY;
-            isDragging = e.button === 0;
-            isRightDragging = e.button === 2;
+            isDragging = true;
             e.preventDefault();
         });
 
         canvas.addEventListener('mousemove', (e) => {
-            if (!isDragging && !isRightDragging) return;
+            if (!isDragging) return;
             const deltaX = e.clientX - lastX;
             const deltaY = e.clientY - lastY;
-            if (isDragging) {
-                camera.angleY += deltaX * 0.01;
-                camera.angleX += deltaY * 0.01;
-                camera.angleX = Math.max(-1.2, Math.min(1.2, camera.angleX));
-            }
-            if (isRightDragging) {
-                camera.offsetX += deltaX * 0.005;
-                camera.offsetY -= deltaY * 0.005;
-            }
+            camera.angleY += deltaX * 0.01;
+            camera.angleX += deltaY * 0.01;
+            camera.angleX = Math.max(-1.2, Math.min(1.2, camera.angleX));
             lastX = e.clientX;
             lastY = e.clientY;
         });
 
         canvas.addEventListener('mouseup', () => {
             isDragging = false;
-            isRightDragging = false;
         });
 
         canvas.addEventListener('wheel', (e) => {
             e.preventDefault();
-            camera.distance += e.deltaY * 0.01;
-            camera.distance = Math.max(1, Math.min(6, camera.distance));
+            camera.distance -= e.deltaY * 0.002;
+            camera.distance = Math.max(2.5, Math.min(5.5, camera.distance));
         });
 
-        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+        // 触摸交互
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                const touch = e.touches[0];
+                lastX = touch.clientX;
+                lastY = touch.clientY;
+                isDragging = true;
+            }
+            e.preventDefault();
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 1 && isDragging) {
+                const touch = e.touches[0];
+                const deltaX = touch.clientX - lastX;
+                const deltaY = touch.clientY - lastY;
+                camera.angleY += deltaX * 0.01;
+                camera.angleX += deltaY * 0.01;
+                camera.angleX = Math.max(-1.2, Math.min(1.2, camera.angleX));
+                lastX = touch.clientX;
+                lastY = touch.clientY;
+            }
+            e.preventDefault();
+        });
+
+        canvas.addEventListener('touchend', () => {
+            isDragging = false;
+        });
 
         // 启动
         initTree();
