@@ -33,7 +33,7 @@
         document.body.appendChild(renderer.domElement);
 
         // 轨道控制器
-        const controls = new OrbitControls(camera, renderer.domElement);
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
 
         // 生成粒子数量
@@ -128,3 +128,4 @@
 </body>
 
 </html>
+
